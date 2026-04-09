@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Map Generator</title>
+  <style>
+    :root {
+      --bg: #e9eadf;
+      --panel: #f7f4ea;
+      --ink: #213229;
+      --muted: #617164;
+      --accent: #9d5c3d;
+      --accent-2: #5d7f65;
+      --line: #c9c5b7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(157, 92, 61, 0.14), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(93, 127, 101, 0.18), transparent 30%),
+        var(--bg);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      min-height: 100vh;
+    }
+    .sidebar {
+      padding: 18px;
+      border-right: 1px solid var(--line);
+      background: rgba(247, 244, 234, 0.92);
+      overflow: auto;
+      backdrop-filter: blur(10px);
+    }
+    .content {
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+    h1, h2 {
+      margin: 0 0 10px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .sub {
+      color: var(--muted);
+      margin: 0 0 16px;
+      line-height: 1.4;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    button {
+      appearance: none;
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: #f8f6ee;
+      padding: 10px 14px;
+      cursor: pointer;
+      font: inherit;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--ink);
+    }
+    input[type="number"] {
+      width: 108px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      font: inherit;
+    }
+    .controls {
+      display: grid;
+      gap: 12px;
+    }
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .tab {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 247, 0.72);
+      color: var(--ink);
+      padding: 8px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    .tab.active {
+      background: var(--accent-2);
+      color: #f8f6ee;
+      border-color: var(--accent-2);
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: grid;
+      gap: 12px;
+    }
+    .control {
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255, 253, 247, 0.8);
+    }
+    .control-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .control-head strong {
+      font-weight: 600;
+    }
+    .range-row {
+      display: grid;
+      grid-template-columns: 1fr 80px;
+      gap: 10px;
+      align-items: center;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    .panel {
+      border: 1px solid var(--line);
+      background: rgba(247, 244, 234, 0.82);
+      padding: 14px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .stat {
+      padding: 10px;
+      background: rgba(255, 253, 247, 0.85);
+      border: 1px solid var(--line);
+    }
+    .stat .label {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    canvas {
+      width: min(100%, 900px);
+      height: auto;
+      display: block;
+      image-rendering: pixelated;
+      border: 1px solid var(--line);
+      background: #b7c9d9;
+    }
+    .status {
+      color: var(--muted);
+      min-height: 1.3em;
+    }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h1>Map Generator</h1>
+      <p class="sub">Tune the terrain fields, preview the result instantly, then export the generated JSON.</p>
+      <div class="toolbar">
+        <label>
+          Seed<br>
+          <input id="seedInput" type="number" placeholder="random">
+        </label>
+        <button id="randomSeed" class="secondary" type="button">Random Seed</button>
+        <button id="generateBtn" type="button">Generate</button>
+        <button id="downloadBtn" class="secondary" type="button">Download JSON</button>
+      </div>
+      <div id="tabs" class="tabs"></div>
+      <div id="controls" class="controls"></div>
+    </aside>
+    <main class="content">
+      <section class="panel">
+        <h2>Preview</h2>
+        <div id="status" class="status">Loading parameter schema…</div>
+        <canvas id="preview" width="800" height="800"></canvas>
+      </section>
+      <section class="panel">
+        <h2>Summary</h2>
+        <div id="stats" class="stats"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const controlsEl = document.getElementById("controls");
+    const statsEl = document.getElementById("stats");
+    const statusEl = document.getElementById("status");
+    const seedInput = document.getElementById("seedInput");
+    const tabsEl = document.getElementById("tabs");
+    const canvas = document.getElementById("preview");
+    const ctx = canvas.getContext("2d");
+    let schema = null;
+    let currentMap = null;
+    let generateTimer = null;
+
+    const tabDefinitions = [
+      { id: "shape", label: "Shape", keys: ["width", "height", "blob_count", "blob_radius_min", "blob_radius_max", "basin_count", "ridge_count", "ridge_width_min", "ridge_width_max", "land_threshold", "land_smooth_passes"] },
+      { id: "water", label: "Water", keys: ["lake_count", "lake_radius_min", "lake_radius_max", "lake_threshold"] },
+      { id: "heights", label: "Heights", keys: ["tier2_threshold", "tier3_threshold", "stair_chance"] },
+      { id: "forest", label: "Forest", keys: ["forest_patch_count", "forest_patch_radius_min", "forest_patch_radius_max", "forest_base_density", "forest_cluster_strength", "forest_extra_tree_chance", "cliff_tree_penalty"] },
+      { id: "detail", label: "Detail", keys: ["rock_shore_chance", "rock_cliff_chance"] },
+    ];
+
+    function specTab(spec) {
+      for (const tab of tabDefinitions) {
+        if (tab.keys.includes(spec.key)) {
+          return tab.id;
+        }
+      }
+      return "detail";
+    }
+
+    function activateTab(tabId) {
+      for (const button of tabsEl.querySelectorAll(".tab")) {
+        button.classList.toggle("active", button.dataset.tab === tabId);
+      }
+      for (const panel of controlsEl.querySelectorAll(".tab-panel")) {
+        panel.classList.toggle("active", panel.dataset.tab === tabId);
+      }
+    }
+
+    function formatValue(value, spec) {
+      return spec.type === "int" ? String(Math.round(value)) : Number(value).toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+    }
+
+    function buildControls(data) {
+      schema = data;
+      controlsEl.innerHTML = "";
+      tabsEl.innerHTML = "";
+      const panels = new Map();
+      for (const tab of tabDefinitions) {
+        const button = document.createElement("button");
+        button.className = "tab";
+        button.type = "button";
+        button.dataset.tab = tab.id;
+        button.textContent = tab.label;
+        button.addEventListener("click", () => activateTab(tab.id));
+        tabsEl.appendChild(button);
+
+        const panel = document.createElement("div");
+        panel.className = "tab-panel";
+        panel.dataset.tab = tab.id;
+        controlsEl.appendChild(panel);
+        panels.set(tab.id, panel);
+      }
+
+      for (const spec of data.parameters) {
+        const value = data.defaults[spec.key];
+        const wrapper = document.createElement("div");
+        wrapper.className = "control";
+        wrapper.innerHTML = `
+          <div class="control-head">
+            <strong>${spec.label}</strong>
+            <span id="value-${spec.key}">${formatValue(value, spec)}</span>
+          </div>
+          <div class="range-row">
+            <input id="range-${spec.key}" type="range" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${value}">
+            <input id="number-${spec.key}" type="number" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${value}">
+          </div>
+        `;
+        controlsEl.appendChild(wrapper);
+        const range = wrapper.querySelector(`#range-${spec.key}`);
+        const number = wrapper.querySelector(`#number-${spec.key}`);
+        const label = wrapper.querySelector(`#value-${spec.key}`);
+        const sync = (raw) => {
+          const parsed = spec.type === "int" ? parseInt(raw, 10) : parseFloat(raw);
+          const valueText = formatValue(parsed, spec);
+          range.value = parsed;
+          number.value = parsed;
+          label.textContent = valueText;
+        };
+        range.addEventListener("input", () => {
+          sync(range.value);
+          scheduleGenerate();
+        });
+        number.addEventListener("input", () => {
+          sync(number.value);
+          scheduleGenerate();
+        });
+        panels.get(specTab(spec)).appendChild(wrapper);
+      }
+      activateTab(tabDefinitions[0].id);
+    }
+
+    function scheduleGenerate(delay = 180) {
+      if (generateTimer) {
+        clearTimeout(generateTimer);
+      }
+      generateTimer = setTimeout(() => {
+        generateTimer = null;
+        generate();
+      }, delay);
+    }
+
+    function collectParams() {
+      const params = {};
+      for (const spec of schema.parameters) {
+        const value = document.getElementById(`number-${spec.key}`).value;
+        params[spec.key] = spec.type === "int" ? parseInt(value, 10) : parseFloat(value);
+      }
+      return params;
+    }
+
+    function renderStats(mapData) {
+      statsEl.innerHTML = "";
+      const summary = mapData.summary || {};
+      const entries = [
+        ["Seed", mapData.seed],
+        ["Playable Tiles", summary.playable_tiles],
+        ["Water Edge Tiles", summary.shore_water_tiles],
+        ["East Stairs", summary.stairs_east],
+        ["West Stairs", summary.stairs_west],
+        ["Trees", summary.tree_count],
+        ["Rocks", summary.rock_count],
+        ["Max Height", summary.max_height],
+      ];
+      for (const [label, value] of entries) {
+        const item = document.createElement("div");
+        item.className = "stat";
+        item.innerHTML = `<span class="label">${label}</span><strong>${value ?? "-"}</strong>`;
+        statsEl.appendChild(item);
+      }
+    }
+
+    function renderMap(mapData) {
+      currentMap = mapData;
+      const w = mapData.tilesX;
+      const h = mapData.tilesY;
+      const scale = Math.max(4, Math.floor(900 / Math.max(w, h)));
+      canvas.width = w * scale;
+      canvas.height = h * scale;
+
+      for (let r = 0; r < h; r++) {
+        for (let c = 0; c < w; c++) {
+          const idx = r * w + c;
+          const height = mapData.heightmap[idx];
+          const tile = mapData.tileType[idx];
+          let fill = "#7db0c5";
+          if (tile !== 0) {
+            fill = ["#6e8f58", "#8aa261", "#a3916c"][Math.min(height, 2)] || "#6e8f58";
+          }
+          ctx.fillStyle = fill;
+          ctx.fillRect(c * scale, r * scale, scale, scale);
+          if (tile === 2 || tile === 3) {
+            ctx.fillStyle = "#d8c68f";
+            ctx.fillRect(c * scale, r * scale, scale, scale);
+            ctx.strokeStyle = "#836944";
+            ctx.lineWidth = Math.max(1, scale * 0.18);
+            ctx.beginPath();
+            if (tile === 2) {
+              ctx.moveTo(c * scale + scale * 0.2, r * scale + scale * 0.1);
+              ctx.lineTo(c * scale + scale * 0.8, r * scale + scale * 0.5);
+              ctx.lineTo(c * scale + scale * 0.2, r * scale + scale * 0.9);
+            } else {
+              ctx.moveTo(c * scale + scale * 0.8, r * scale + scale * 0.1);
+              ctx.lineTo(c * scale + scale * 0.2, r * scale + scale * 0.5);
+              ctx.lineTo(c * scale + scale * 0.8, r * scale + scale * 0.9);
+            }
+            ctx.stroke();
+          }
+        }
+      }
+
+      for (const deco of mapData.decorations) {
+        const x = Math.floor((deco.x / 64) * scale);
+        const y = Math.floor((deco.y / 64) * scale);
+        if (deco.type === "spruce") {
+          ctx.fillStyle = "#1d4a2e";
+          ctx.fillRect(x, y, Math.max(2, scale * 0.45), Math.max(2, scale * 0.45));
+        } else if (deco.type === "birch") {
+          ctx.fillStyle = "#8dc96b";
+          ctx.fillRect(x, y, Math.max(2, scale * 0.45), Math.max(2, scale * 0.45));
+        } else if (deco.type === "rock") {
+          ctx.fillStyle = "#555247";
+          ctx.beginPath();
+          ctx.arc(x, y, Math.max(1.5, scale * 0.22), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      renderStats(mapData);
+    }
+
+    async function generate() {
+      if (!schema) return;
+      statusEl.textContent = "Generating map…";
+      const seedValue = seedInput.value.trim();
+      const payload = {
+        seed: seedValue === "" ? null : Number(seedValue),
+        params: collectParams(),
+      };
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        statusEl.textContent = data.error || "Generation failed";
+        return;
+      }
+      seedInput.value = data.seed;
+      statusEl.textContent = `Generated seed ${data.seed}`;
+      renderMap(data);
+    }
+
+    function downloadCurrentMap() {
+      if (!currentMap) return;
+      const blob = new Blob([JSON.stringify(currentMap, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `generated-map-${currentMap.seed}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("generateBtn").addEventListener("click", generate);
+    document.getElementById("downloadBtn").addEventListener("click", downloadCurrentMap);
+    document.getElementById("randomSeed").addEventListener("click", () => {
+      seedInput.value = "";
+      generate();
+    });
+    seedInput.addEventListener("input", () => scheduleGenerate());
+
+    fetch("/api/spec")
+      .then((response) => response.json())
+      .then((data) => {
+        buildControls(data);
+        statusEl.textContent = "Ready";
+        generate();
+      })
+      .catch((error) => {
+        statusEl.textContent = `Failed to load schema: ${error}`;
+      });
+  </script>
+</body>
+</html>
