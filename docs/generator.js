@@ -36,10 +36,10 @@ const PARAMETER_SPECS = [
   {key: "bush_chance",              label: "Bush Chance",          type: "float", min: 0.00,  max: 0.20, step: 0.005},
   {key: "stair_chance",             label: "Stair Chance",         type: "float", min: 0.00,  max: 1.00, step: 0.01},
   {key: "player_count",             label: "Players",              type: "int",   min: 2,     max: 5,    step: 1},
-  {key: "start_gold_per_player",    label: "Start Gold / Player",  type: "int",   min: 0,     max: 6,    step: 1},
-  {key: "neutral_gold_per_player",  label: "Neutral Gold / Player",type: "int",   min: 0,     max: 8,    step: 1},
-  {key: "start_gold_resources",     label: "Start Gold Resources", type: "int",   min: 1,     max: 5,    step: 1},
-  {key: "neutral_gold_resources",   label: "Neutral Gold Resources",type:"int",   min: 1,     max: 5,    step: 1},
+  {key: "start_gold_per_player",    label: "Base Gold Patches",    type: "int",   min: 0,     max: 6,    step: 1},
+  {key: "neutral_gold_per_player",  label: "Map Gold Patches",     type: "int",   min: 0,     max: 8,    step: 1},
+  {key: "start_gold_resources",     label: "Base Gold Patch Size", type: "int",   min: 1,     max: 5,    step: 1},
+  {key: "neutral_gold_resources",   label: "Map Gold Patch Size",  type: "int",   min: 1,     max: 5,    step: 1},
 ];
 
 const DEFAULT_CONFIG = {
