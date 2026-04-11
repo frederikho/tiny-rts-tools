@@ -35,11 +35,9 @@ const PARAMETER_SPECS = [
   {key: "rock_cliff_chance",        label: "Cliff Rock Chance",    type: "float", min: 0.00,  max: 0.50, step: 0.01},
   {key: "bush_chance",              label: "Bush Chance",          type: "float", min: 0.00,  max: 0.20, step: 0.005},
   {key: "stair_chance",             label: "Stair Chance",         type: "float", min: 0.00,  max: 1.00, step: 0.01},
-  {key: "player_count",             label: "Players",              type: "int",   min: 2,     max: 5,    step: 1},
+  {key: "player_count",             label: "Players",              type: "int",   min: 2,     max: 8,    step: 1},
+  {key: "bear_count",               label: "Bears",                type: "int",   min: 0,     max: 20,   step: 1},
   {key: "start_gold_per_player",    label: "Base Gold Patches",    type: "int",   min: 0,     max: 6,    step: 1},
-  {key: "neutral_gold_per_player",  label: "Map Gold Patches",     type: "int",   min: 0,     max: 8,    step: 1},
-  {key: "start_gold_resources",     label: "Base Gold Patch Size", type: "int",   min: 1,     max: 5,    step: 1},
-  {key: "neutral_gold_resources",   label: "Map Gold Patch Size",  type: "int",   min: 1,     max: 5,    step: 1},
 ];
 
 const DEFAULT_CONFIG = {
@@ -79,6 +77,7 @@ const DEFAULT_CONFIG = {
   stair_chance: 0.55,
   edge_void_margin: 2,
   player_count: 2,
+  bear_count: 4,
   start_gold_per_player: 1,
   neutral_gold_per_player: 3,
   start_gold_resources: 1,
@@ -784,10 +783,56 @@ function _placeWaterDecorations(tileType, width, height, seed) {
 }
 
 // ------------------------------------------------------------
+// Bears — farthest-point sampling at a safe distance from spawns
+// ------------------------------------------------------------
+function _placeBears(heightmap, tileType, width, height, totalCount, spawnTiles, seed) {
+  if (totalCount <= 0) return [];
+  const rng = new SeededRandom(seed + 8001);
+  const margin = 4;
+  const MIN_SPAWN_DIST_SQ = 15 * 15;
+
+  const candidates = [];
+  for (let r = margin; r < height - margin; r++) {
+    for (let c = margin; c < width - margin; c++) {
+      const idx = r * width + c;
+      if (heightmap[idx] !== 0 || tileType[idx] !== 1) continue;
+
+      // Distance from spawns
+      if (spawnTiles.some(([sr, sc]) => (r - sr) ** 2 + (c - sc) ** 2 < MIN_SPAWN_DIST_SQ)) continue;
+
+      candidates.push([r, c]);
+    }
+  }
+
+  if (candidates.length === 0) return [];
+
+  const chosen = [candidates[Math.floor(rng.random() * candidates.length)]];
+  for (let i = 1; i < totalCount; i++) {
+    let bestDist = -1, best = null;
+    for (const [cr, cc] of candidates) {
+      let minD = Infinity;
+      for (const [pr, pc] of chosen) {
+        const d = (cr - pr) ** 2 + (cc - pc) ** 2;
+        if (d < minD) minD = d;
+      }
+      if (minD > bestDist) { bestDist = minD; best = [cr, cc]; }
+    }
+    if (best) chosen.push(best);
+  }
+
+  return chosen.map(([r, c]) => ({
+    type: "bear",
+    x: (c + rng.uniform(0.2, 0.8)) * TILE_SIZE,
+    y: (r + rng.uniform(0.2, 0.8)) * TILE_SIZE,
+    placedAt: 0
+  }));
+}
+
+// ------------------------------------------------------------
 // Summary & top-level API
 // ------------------------------------------------------------
 function _summarizeMap(mapData) {
-  const {tilesX: w, tilesY: h, heightmap, tileType, decorations} = mapData;
+  const {tilesX: w, tilesY: h, heightmap, tileType, decorations, neutralUnits} = mapData;
   let shoreWater = 0;
   for (let r = 1; r < h-1; r++)
     for (let c = 1; c < w-1; c++) {
@@ -802,6 +847,7 @@ function _summarizeMap(mapData) {
     stairs_west:       tileType.reduce((s,v) => s + (v===3?1:0), 0),
     tree_count:        decorations.reduce((s,d) => s + (d.type==="spruce"||d.type==="birch"?1:0), 0),
     rock_count:        decorations.reduce((s,d) => s + (d.type==="rock"?1:0), 0),
+    bear_count:        (neutralUnits || []).reduce((s,u) => s + (u.type==="bear"?1:0), 0),
     max_height:        heightmap.reduce((m,v) => Math.max(m,v), 0),
   };
 }
@@ -826,7 +872,7 @@ function generateMap(configOverrides, seed) {
 
   const {heightmap, tileType} = _buildHeightmap(cfg, resolvedSeed);
   const decorations      = _generateDecorations(heightmap, tileType, cfg.width, cfg.height, resolvedSeed, cfg);
-  const playerCount      = Math.max(2, Math.min(5, cfg.player_count));
+  const playerCount      = Math.max(2, Math.min(8, cfg.player_count));
   const {buildings, spawns, workers} = _placePlayers(heightmap, tileType, cfg.width, cfg.height, playerCount, resolvedSeed);
   const spawnTiles            = spawns.map(s => [Math.floor(s.y / TILE_SIZE), Math.floor(s.x / TILE_SIZE)]);
   const startGoldDecorations  = _placeStartGold(spawnTiles, heightmap, tileType, cfg.width, cfg.height, cfg.start_gold_per_player, cfg.start_gold_resources, resolvedSeed);
@@ -835,11 +881,13 @@ function generateMap(configOverrides, seed) {
     ? _placeGoldDeposits(heightmap, tileType, cfg.width, cfg.height, neutralGoldCount, spawnTiles, cfg.neutral_gold_resources, resolvedSeed)
     : [];
   const waterDecorations      = _placeWaterDecorations(tileType, cfg.width, cfg.height, resolvedSeed);
+  const bears = _placeBears(heightmap, tileType, cfg.width, cfg.height, cfg.bear_count, spawnTiles, resolvedSeed);
 
   const result = {
     tilesX: cfg.width, tilesY: cfg.height,
     heightmap, tileType,
     decorations: [...decorations, ...startGoldDecorations, ...neutralGoldDecorations, ...waterDecorations],
+    neutralUnits: bears,
     buildings, spawns, towers: [], workers,
     seed: resolvedSeed,
     params: {...cfg},

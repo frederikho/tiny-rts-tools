@@ -14,7 +14,7 @@ let currentMap    = null;
 let generateTimer = null;
 
 const TAB_DEFINITIONS = [
-  {id: "players", label: "Players", keys: ["player_count","start_gold_per_player","neutral_gold_per_player","start_gold_resources","neutral_gold_resources"]},
+  {id: "players", label: "Players", keys: ["player_count","bear_count","start_gold_per_player","neutral_gold_per_player","start_gold_resources","neutral_gold_resources"]},
   {id: "shape",   label: "Shape",   keys: ["width","height","blob_count","blob_radius_min","blob_radius_max","basin_count","ridge_count","ridge_width_min","ridge_width_max","land_threshold","land_smooth_passes"]},
   {id: "water",   label: "Water",   keys: ["lake_count","lake_radius_min","lake_radius_max","lake_threshold"]},
   {id: "heights", label: "Heights", keys: ["max_terrain_height","tier2_threshold","tier3_threshold","stair_chance"]},
@@ -22,7 +22,7 @@ const TAB_DEFINITIONS = [
   {id: "detail",  label: "Detail",  keys: ["rock_shore_chance","rock_cliff_chance","bush_chance"]},
 ];
 
-const PLAYER_COLORS = ["#e63030","#3060e6","#30b030","#e09020","#a030c0"];
+const PLAYER_COLORS = ["#255277","#6C2F2F","#4D3765","#786C12","#27373D","#2C6736","#79827D","#805022"];
 
 const TILE_COLORS = ["#6e8f58","#8aa261","#a3916c","#9b7555","#d0c8b8"];
 
@@ -111,7 +111,7 @@ function renderStats(mapData) {
   for (const [label, value] of [
     ["Seed", mapData.seed], ["Playable Tiles", s.playable_tiles], ["Water Edge Tiles", s.shore_water_tiles],
     ["East Stairs", s.stairs_east], ["West Stairs", s.stairs_west],
-    ["Trees", s.tree_count], ["Rocks", s.rock_count], ["Max Height", s.max_height],
+    ["Trees", s.tree_count], ["Rocks", s.rock_count], ["Bears", s.bear_count], ["Max Height", s.max_height],
   ]) {
     const el = document.createElement("div");
     el.className = "stat";
@@ -204,6 +204,25 @@ function renderMap(mapData) {
         ctx.ellipse(x, y, cr*2.5, cr, 0, 0, Math.PI*2);
         ctx.fill();
         break;
+      }
+    }
+  }
+
+  // Neutral units
+  if (mapData.neutralUnits) {
+    for (const unit of mapData.neutralUnits) {
+      const x = Math.floor((unit.x / TILE_SIZE) * scale);
+      const y = Math.floor((unit.y / TILE_SIZE) * scale);
+      if (unit.type === "bear") {
+        ctx.fillStyle = "#4b2c20"; // Dark brown
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(3, scale * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+        // Little ears
+        ctx.beginPath();
+        ctx.arc(x - scale*0.25, y - scale*0.25, scale*0.15, 0, Math.PI*2);
+        ctx.arc(x + scale*0.25, y - scale*0.25, scale*0.15, 0, Math.PI*2);
+        ctx.fill();
       }
     }
   }
